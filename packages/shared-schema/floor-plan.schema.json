@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roomcraft.dev/schemas/floor-plan-0.1.json",
+  "title": "FloorPlan",
+  "description": "RoomCraft 户型结构化数据（唯一事实源）。坐标单位：米；平面坐标系：原点在户型图左上角，x 向右，y 向下；渲染时映射为 Three.js 的 (x, 地面高度, y)。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "meta", "walls", "rooms", "scale"],
+  "properties": {
+    "schemaVersion": {
+      "const": "0.1",
+      "description": "Schema 版本，破坏性变更必须升版本"
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceType"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "户型名称（如『XX小区 两室两厅』）"
+        },
+        "sourceType": {
+          "enum": ["electronic", "photo"],
+          "description": "来源：electronic=电子户型图；photo=翻拍/截图"
+        },
+        "floorHeight": {
+          "type": "number",
+          "exclusiveMinimum": 2.2,
+          "maximum": 4.5,
+          "default": 2.8,
+          "description": "层高（米）"
+        },
+        "unsupportedFeatures": {
+          "type": "array",
+          "items": {
+            "enum": ["duplex", "bay_window", "column", "stairs", "multi_floor"]
+          },
+          "description": "识别到但 V1 不支持的特性降级记录（用于向用户提示）"
+        }
+      }
+    },
+    "walls": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Wall" },
+      "minItems": 3,
+      "description": "墙体列表（含外墙与内墙）"
+    },
+    "rooms": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Room" },
+      "description": "房间列表（至少含名称，用于标签与后续机位/AI 布置语义）"
+    },
+    "scale": {
+      "$ref": "#/$defs/Scale",
+      "description": "比例尺标定来源；无可靠标注时解析必须整体失败，不允许估算"
+    }
+  },
+  "$defs": {
+    "Point2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number", "description": "米，向右为正" },
+        "y": { "type": "number", "description": "米，向下为正（平面图坐标，非三维高度）" }
+      }
+    },
+    "Opening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "t", "width", "height", "sill"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "开口唯一 ID"
+        },
+        "type": {
+          "enum": ["door", "window"],
+          "description": "door：贯通门洞（sill 恒为 0）；window：带窗台与玻璃"
+        },
+        "t": {
+          "type": "number",
+          "minimum": 0,
+          "description": "开口起点沿墙轴方向距 p1 的距离（米）"
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 6,
+          "description": "开口宽度（米）"
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "开口高度（米，自 sill 起算）"
+        },
+        "sill": {
+          "type": "number",
+          "minimum": 0,
+          "description": "开口底边距地面高度（米）；门为 0"
+        }
+      }
+    },
+    "Wall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "p1", "p2", "thickness", "openings"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "墙体唯一 ID"
+        },
+        "p1": { "$ref": "#/$defs/Point2", "description": "墙轴起点（墙中心线）" },
+        "p2": { "$ref": "#/$defs/Point2", "description": "墙轴终点（墙中心线）" },
+        "thickness": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "墙厚（米）；外墙常用 0.24，内墙 0.12"
+        },
+        "openings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Opening" },
+          "description": "该墙上的门窗洞；同一墙内开口不得重叠"
+        }
+      }
+    },
+    "Room": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "房间唯一 ID"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "户型图上的房间名（客厅/主卧/阳台…）"
+        },
+        "polygon": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Point2" },
+          "minItems": 3,
+          "description": "房间边界多边形（可选，用于地面分色/机位启发式）"
+        },
+        "labelPosition": {
+          "$ref": "#/$defs/Point2",
+          "description": "名称标签的摆放位置（可选）"
+        }
+      }
+    },
+    "ScaleReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "valueM", "p1", "p2", "source"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$"
+        },
+        "valueM": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "标注对应的真实长度（米）"
+        },
+        "p1": { "$ref": "#/$defs/Point2", "description": "标注对应线段起点（与墙体同一坐标系）" },
+        "p2": { "$ref": "#/$defs/Point2", "description": "标注对应线段终点" },
+        "source": {
+          "enum": ["annotation", "user"],
+          "description": "annotation=图上尺寸标注；user=用户点墙标定（V1.1）"
+        }
+      }
+    },
+    "Scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["references"],
+      "properties": {
+        "references": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ScaleReference" },
+          "minItems": 1,
+          "description": "至少一条标定；多条时做交叉验证（偏差超容差判为不可信）"
+        },
+        "deviationToleranceM": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 0.15,
+          "description": "标定交叉验证容差（米）"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+[project]
+name = "roomcraft"
+version = "0.1.0"
+description = "RoomCraft monorepo (Python workspace root)"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.6",
+    "jsonschema>=4.23",
+    "datamodel-code-generator>=0.26",
+]
+
+[tool.uv.workspace]
+members = ["apps/server", "spikes/spike_a", "spikes/spike_b"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# 中文提示词模板，行宽不可控
+"spikes/spike_a/spike_a/prompt.py" = ["E501"]
+# 由 datamodel-codegen 生成，勿手改
+"apps/server/app/plan/floor_plan_models.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["apps/server/tests"]

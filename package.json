@@ -1,0 +1,26 @@
+{
+  "name": "roomcraft",
+  "private": true,
+  "version": "0.1.0",
+  "description": "上传户型图 → AI 结构化 → 可编辑 3D 户型 + 风格效果图（MVP）",
+  "scripts": {
+    "dev:web": "pnpm --filter @roomcraft/web dev",
+    "build:web": "pnpm --filter @roomcraft/web build",
+    "typecheck:web": "pnpm --filter @roomcraft/web typecheck",
+    "test:web": "pnpm --filter @roomcraft/web test",
+    "schema:codegen": "pnpm --filter @roomcraft/shared-schema codegen",
+    "schema:codegen:py": "uv run datamodel-codegen --input packages/shared-schema/floor-plan.schema.json --input-file-type jsonschema --output apps/server/app/plan/floor_plan_models.py --output-model-type pydantic_v2.BaseModel --use-schema-description --target-python-version 3.12",
+    "schema:check": "uv run python packages/shared-schema/schema_check.py",
+    "server:dev": "uv sync --all-packages --quiet && uv run uvicorn app.main:app --reload --port 8787",
+    "server:test": "uv sync --all-packages --quiet && uv run pytest -q",
+    "server:lint": "uv run ruff check apps/server spikes packages/shared-schema/schema_check.py",
+    "server:format": "uv run ruff format apps/server spikes packages/shared-schema/schema_check.py",
+    "spike:a": "uv sync --all-packages --quiet && uv run python -m spike_a",
+    "spike:b": "uv sync --all-packages --quiet && uv run python -m spike_b",
+    "spike:smoke": "pnpm spike:a --provider mock --limit 1 && pnpm spike:b --provider mock --scene spikes/samples/000_synth_smoke_electronic.png --style spikes/samples/000_synth_smoke_electronic.png --count 1",
+    "samples:synth": "uv run --with pillow python spikes/samples/make_synthetic.py"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

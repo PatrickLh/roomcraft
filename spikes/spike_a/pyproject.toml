@@ -1,0 +1,19 @@
+[project]
+name = "spike-a"
+version = "0.1.0"
+description = "Spike A：视觉大模型户型图识别验证（独立脚本）"
+requires-python = ">=3.12"
+dependencies = [
+    "roomcraft-server",
+    "jsonschema>=4.23",
+]
+
+[tool.uv.sources]
+roomcraft-server = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["spike_a"]

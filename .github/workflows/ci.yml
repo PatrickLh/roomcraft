@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  web:
+    name: Web（类型检查 / 测试 / 构建）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Schema TS 类型 codegen 无漂移
+        run: |
+          pnpm schema:codegen
+          git diff --exit-code packages/shared-schema/generated
+      - run: pnpm typecheck:web
+      - run: pnpm test:web
+      - run: pnpm build:web
+
+  python:
+    name: Python（lint / 测试 / fixtures / Spike 冒烟）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-packages
+      - run: uv run ruff check apps/server spikes packages/shared-schema/schema_check.py
+      - run: uv run pytest -q
+      - name: Schema fixtures 校验（Python 侧）
+        run: uv run python packages/shared-schema/schema_check.py
+      - name: Spike A 冒烟（mock，验证脚本链路）
+        run: uv run python -m spike_a --provider mock --limit 1
+      - name: Spike B 冒烟（mock，含 AI 标识校验）
+        run: uv run python -m spike_b --provider mock --scene spikes/samples/000_synth_smoke_electronic.png --style spikes/samples/000_synth_smoke_electronic.png --count 1

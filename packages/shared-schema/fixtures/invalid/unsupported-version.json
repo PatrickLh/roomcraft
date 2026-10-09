@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "0.2",
+  "meta": {
+    "sourceType": "electronic"
+  },
+  "walls": [
+    {
+      "id": "w-north",
+      "p1": { "x": 0, "y": 0 },
+      "p2": { "x": 10.2, "y": 0 },
+      "thickness": 0.24,
+      "openings": []
+    },
+    {
+      "id": "w-south",
+      "p1": { "x": 10.2, "y": 8.4 },
+      "p2": { "x": 0, "y": 8.4 },
+      "thickness": 0.24,
+      "openings": []
+    },
+    {
+      "id": "w-west",
+      "p1": { "x": 0, "y": 8.4 },
+      "p2": { "x": 0, "y": 0 },
+      "thickness": 0.24,
+      "openings": []
+    }
+  ],
+  "rooms": [
+    { "id": "r-living", "name": "客厅", "labelPosition": { "x": 5, "y": 4 } }
+  ],
+  "scale": {
+    "references": [
+      {
+        "id": "s-north",
+        "valueM": 10.2,
+        "p1": { "x": 0, "y": 0 },
+        "p2": { "x": 10.2, "y": 0 },
+        "source": "annotation"
+      }
+    ]
+  }
+}

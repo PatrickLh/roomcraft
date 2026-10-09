@@ -1,0 +1,4 @@
+source: "合成样本（make_synthetic.py，不计入真实样本）"
+has_annotation: true
+expected_rooms: 5
+notes: "仅用于 mock 冒烟验证脚本链路"

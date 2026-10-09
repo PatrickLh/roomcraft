@@ -1,0 +1,144 @@
+{
+  "sample": "000_synth_smoke_electronic.png",
+  "provider": "mock",
+  "model": "mock-vision",
+  "promptVersion": "v1",
+  "timeS": 0.0,
+  "usage": {
+    "mock": true
+  },
+  "raw": {
+    "schemaVersion": "0.1",
+    "meta": {
+      "name": "Mock·单间",
+      "sourceType": "electronic",
+      "floorHeight": 2.8
+    },
+    "walls": [
+      {
+        "id": "w-n",
+        "p1": {
+          "x": 0,
+          "y": 0
+        },
+        "p2": {
+          "x": 4.0,
+          "y": 0
+        },
+        "thickness": 0.24,
+        "openings": [
+          {
+            "id": "o-win",
+            "type": "window",
+            "t": 1.2,
+            "width": 1.5,
+            "height": 1.4,
+            "sill": 0.9
+          }
+        ]
+      },
+      {
+        "id": "w-e",
+        "p1": {
+          "x": 4.0,
+          "y": 0
+        },
+        "p2": {
+          "x": 4.0,
+          "y": 3.6
+        },
+        "thickness": 0.24,
+        "openings": []
+      },
+      {
+        "id": "w-s",
+        "p1": {
+          "x": 4.0,
+          "y": 3.6
+        },
+        "p2": {
+          "x": 0,
+          "y": 3.6
+        },
+        "thickness": 0.24,
+        "openings": [
+          {
+            "id": "o-door",
+            "type": "door",
+            "t": 1.5,
+            "width": 0.9,
+            "height": 2.05,
+            "sill": 0
+          }
+        ]
+      },
+      {
+        "id": "w-w",
+        "p1": {
+          "x": 0,
+          "y": 3.6
+        },
+        "p2": {
+          "x": 0,
+          "y": 0
+        },
+        "thickness": 0.24,
+        "openings": []
+      }
+    ],
+    "rooms": [
+      {
+        "id": "r-living",
+        "name": "客厅",
+        "polygon": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 4.0,
+            "y": 0
+          },
+          {
+            "x": 4.0,
+            "y": 3.6
+          },
+          {
+            "x": 0,
+            "y": 3.6
+          }
+        ],
+        "labelPosition": {
+          "x": 2.0,
+          "y": 1.8
+        }
+      }
+    ],
+    "scale": {
+      "references": [
+        {
+          "id": "s-n",
+          "valueM": 4.0,
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 4.0,
+            "y": 0
+          },
+          "source": "annotation"
+        }
+      ]
+    }
+  },
+  "ok": true,
+  "stage": "ok",
+  "wallCount": 4,
+  "doorCount": 1,
+  "windowCount": 1,
+  "roomCount": 1,
+  "scaleRefs": 1,
+  "maxScaleDeviationM": 0.0,
+  "unsupported": []
+}

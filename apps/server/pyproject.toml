@@ -1,0 +1,20 @@
+[project]
+name = "roomcraft-server"
+version = "0.1.0"
+description = "RoomCraft 后端：AI 代理、配额、方案存储（M0 骨架）"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "httpx>=0.27",
+    "pillow>=10.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

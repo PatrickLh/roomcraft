@@ -1,0 +1,2 @@
+﻿sample,provider,model,ok,stage,failureCategory,failure,wallCount,doorCount,windowCount,roomCount,scaleRefs,maxScaleDeviationM,timeS
+000_synth_smoke_electronic.png,mock,mock-vision,True,ok,,,4,1,1,1,1,0.0,0.0

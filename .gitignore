@@ -1,0 +1,25 @@
+# Node / pnpm
+node_modules/
+dist/
+coverage/
+*.log
+
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# 环境与密钥（密钥只允许存在于后端环境，绝不进浏览器/仓库）
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.idea/
+.vscode/

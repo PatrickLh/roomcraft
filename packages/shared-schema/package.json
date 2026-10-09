@@ -1,0 +1,20 @@
+{
+  "name": "@roomcraft/shared-schema",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "户型 JSON Schema（唯一事实源）+ 双端类型/校验入口",
+  "exports": {
+    ".": "./index.ts",
+    "./schema.json": "./floor-plan.schema.json",
+    "./fixtures/*": "./fixtures/*"
+  },
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "codegen": "json2ts -i floor-plan.schema.json -o generated/floor-plan.d.ts --banner-comment \"本文件由 floor-plan.schema.json 生成，勿手改。运行 pnpm schema:codegen 重新生成。\""
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "^15.0.4"
+  }
+}
