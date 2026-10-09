@@ -16,6 +16,7 @@
     "server:lint": "uv run ruff check apps/server spikes packages/shared-schema/schema_check.py",
     "server:format": "uv run ruff format apps/server spikes packages/shared-schema/schema_check.py",
     "spike:a": "uv sync --all-packages --quiet && uv run python -m spike_a",
+    "spike:ping": "uv sync --all-packages --quiet && uv run python -m spike_a.ping",
     "spike:b": "uv sync --all-packages --quiet && uv run python -m spike_b",
     "spike:smoke": "pnpm spike:a --provider mock --limit 1 && pnpm spike:b --provider mock --scene spikes/samples/000_synth_smoke_electronic.png --style spikes/samples/000_synth_smoke_electronic.png --count 1",
     "samples:synth": "uv run --with pillow python spikes/samples/make_synthetic.py"

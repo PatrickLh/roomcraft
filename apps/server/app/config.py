@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     vision_base_url: str = ""
     vision_api_key: str = ""
     vision_model: str = ""
+    # 推理型模型会把 reasoning token 计入 max_tokens，必要时调大
+    vision_max_tokens: int = 8192
+    # 打印原始响应体（调试用，绝不输出密钥）
+    vision_debug: bool = False
+    # 单次视觉调用超时（秒）
+    vision_timeout: float = 300.0
+    # 透传厂商扩展参数（JSON 对象字符串），如方舟关闭深度思考：
+    #   ROOMCRAFT_VISION_EXTRA_BODY={"thinking":{"type":"disabled"}}
+    vision_extra_body: str = ""
 
     # 生图模型（风格效果图）
     image_provider: str = "mock"  # openai_compatible | mock

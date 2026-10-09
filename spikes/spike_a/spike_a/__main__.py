@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.config import get_settings
+from app.media.image_prep import prepare_image_for_vision
 from app.plan.checks import check_semantics, is_usable
 from app.providers import make_vision_provider
 from app.providers.base import ImageRef, ProviderError
@@ -54,14 +55,19 @@ def max_scale_deviation(plan: dict) -> float | None:
     return max(devs) if devs else None
 
 
-async def run_one(provider, validator: Draft202012Validator, system: str, prompt: str, image: Path) -> dict:
+async def run_one(
+    provider, validator: Draft202012Validator, system: str, prompt: str, image: Path, out_dir: Path
+) -> dict:
     record: dict = {
         "sample": image.name,
         "provider": provider.name,
         "model": provider.model,
         "promptVersion": PROMPT_VERSION,
     }
-    ref = ImageRef(data=image.read_bytes(), mime=MIME.get(image.suffix.lower(), "image/png"))
+    raw_data = image.read_bytes()
+    data, mime = prepare_image_for_vision(raw_data, MIME.get(image.suffix.lower(), "image/png"))
+    ref = ImageRef(data=data, mime=mime)
+    record["imageKBSent"] = round(len(data) / 1024)
     t0 = time.monotonic()
     try:
         resp = await provider.complete(system, prompt, ref)
@@ -70,10 +76,13 @@ async def run_one(provider, validator: Draft202012Validator, system: str, prompt
         return record
     record["timeS"] = round(time.monotonic() - t0, 2)
     record["usage"] = resp.usage
+    record["finish"] = resp.finish
 
     try:
         data = parse_model_output(resp.text)
     except (ValueError, TypeError) as e:
+        # 完整原始输出落盘，供人工诊断字段遵从/格式问题
+        (out_dir / f"{image.stem}.raw.txt").write_text(resp.text, encoding="utf-8")
         record.update(ok=False, stage="parse", failure=f"模型输出不是合法 JSON: {e}; 前200字: {resp.text[:200]}")
         return record
     record["raw"] = data
@@ -85,12 +94,21 @@ async def run_one(provider, validator: Draft202012Validator, system: str, prompt
                       failure=str(f.get("reason", ""))[:200])
         return record
 
-    errors = [str(e.message) for e in validator.iter_errors(data)]
+    def format_schema_error(e) -> str:
+        extra = e.params.get("additionalProperty") if isinstance(getattr(e, "params", None), dict) else None
+        return f"{e.json_path} {e.message}" + (f"（多余字段 '{extra}'）" if extra else "")
+
+    def dump_raw() -> None:
+        (out_dir / f"{image.stem}.raw.txt").write_text(resp.text, encoding="utf-8")
+
+    errors = [format_schema_error(e) for e in validator.iter_errors(data)]
     if errors:
+        dump_raw()
         record.update(ok=False, stage="schema", failure="; ".join(errors)[:300])
         return record
     issues = check_semantics(data)
     if not is_usable(issues):
+        dump_raw()
         record.update(ok=False, stage="semantic",
                       failure="; ".join(i.message for i in issues if i.level == "error")[:300])
         return record
@@ -138,7 +156,7 @@ def main() -> int:
     records: list[dict] = []
     for img in images:
         print(f"  → {img.name} ...", flush=True)
-        rec = asyncio.run(run_one(provider, validator, SYSTEM, prompt, img))
+        rec = asyncio.run(run_one(provider, validator, SYSTEM, prompt, img, out_dir))
         records.append(rec)
         print(f"    {'OK ' if rec['ok'] else 'FAIL'} [{rec['stage']}] {rec.get('failure', '')[:100]}")
         (out_dir / f"{img.stem}.json").write_text(
@@ -147,8 +165,8 @@ def main() -> int:
 
     # CSV 汇总
     cols = ["sample", "provider", "model", "ok", "stage", "failureCategory", "failure",
-            "wallCount", "doorCount", "windowCount", "roomCount", "scaleRefs",
-            "maxScaleDeviationM", "timeS"]
+            "imageKBSent", "finish", "wallCount", "doorCount", "windowCount", "roomCount",
+            "scaleRefs", "maxScaleDeviationM", "timeS"]
     with (out_dir / "results.csv").open("w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
         w.writeheader()

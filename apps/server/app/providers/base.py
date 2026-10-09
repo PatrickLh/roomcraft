@@ -30,6 +30,7 @@ class ProviderResponse:
     text: str
     model: str
     usage: dict | None = None  # token 用量（厂商返回时保留，供成本记录）
+    finish: str | None = None  # finish_reason（stop/length/…），截断分析用
 
 
 @dataclass
