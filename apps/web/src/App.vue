@@ -13,6 +13,7 @@ async function toggleWalk(): Promise<void> {
 
 function backToTop(): void {
   if (store.viewMode === 'walk') void toggleWalk()
+  else canvasRef.value?.resetTopView()
 }
 
 function enterWalk(): void {
@@ -49,6 +50,9 @@ function downloadSnapshot(): void {
             行走
           </el-button>
         </el-button-group>
+        <el-button :disabled="store.viewMode !== 'top'" @click="canvasRef?.resetTopView()">
+          复位视角
+        </el-button>
         <el-button :disabled="store.viewMode === 'transition'" @click="downloadSnapshot">
           导出截图
         </el-button>

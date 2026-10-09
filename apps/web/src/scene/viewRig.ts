@@ -66,12 +66,17 @@ export class ViewRig {
     this.orbit = new OrbitControls(this.orthoCamera, dom)
     this.orbit.enableDamping = true
     this.orbit.dampingFactor = 0.08
+    // 极角放开：默认 45° 俯角，可从近俯视扫到近水平；方位角 360° 无限制
+    this.orbit.minPolarAngle = SCENE_DEFAULTS.topMinPolarAngle
     this.orbit.maxPolarAngle = SCENE_DEFAULTS.topMaxPolarAngle
-    this.orbit.minPolarAngle = 0
+    this.orbit.minDistance = SCENE_DEFAULTS.topMinDistance
+    this.orbit.maxDistance = SCENE_DEFAULTS.topMaxDistance
     this.orbit.rotateSpeed = 0.9
     this.orbit.panSpeed = 1.0
     this.orbit.zoomSpeed = 0.7
-    this.orbit.zoomToCursor = true // 缩放朝向光标位置
+    // 注意：不启用 zoomToCursor——它会把轨道中心挪到光标处，
+    // 导致后续旋转不再绕建筑中心（用户可感知的「转轴不对」）
+    this.orbit.zoomToCursor = false
 
     const onKeyDown = (e: KeyboardEvent): void => {
       if (this.mode !== 'walk') return
@@ -140,14 +145,49 @@ export class ViewRig {
     this.fitOrtho()
   }
 
-  /** 俯视视锥按户型包围盒 + 视口宽高比自适应，保证居中铺满（留边）。 */
+  /** 回到默认俯视：45° 俯角、以建筑中心为轴、重新适配视锥。 */
+  resetTopView(): void {
+    if (this.mode !== 'top') return
+    this.setTopView()
+  }
+
+  /**
+   * 俯视视锥适配：把含墙高的包围盒 8 个角投影到相机平面（右/上轴）取最大范围，
+   * 按视口宽高比铺满。倾斜视角下墙体高度会占据投影，必须用三维投影而非平面尺寸估算。
+   */
   private fitOrtho(): void {
+    const cam = this.orthoCamera
+    const dir = cam.position.clone().sub(this.orbit.target)
+    if (dir.lengthSq() < 1e-9) dir.set(0, 1, 0.001)
+    dir.normalize()
+    let right: THREE.Vector3
+    let up: THREE.Vector3
+    if (Math.abs(dir.y) > 0.999) {
+      // 近垂直俯视：避免叉积退化；平面「北」（-z）朝屏幕上方
+      right = new THREE.Vector3(1, 0, 0)
+      up = new THREE.Vector3(0, 0, -1)
+    } else {
+      right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize()
+      up = new THREE.Vector3().crossVectors(right, dir).normalize()
+    }
     const size = this.bbox.getSize(new THREE.Vector3())
+    // 注意用半尺寸角点（±half）：fit 求的是「中心到最远角」的投影半径，
+    // 误用全尺寸会让视锥放大约一倍（表现为户型偏小、四周大量留白）
+    const half = size.clone().multiplyScalar(0.5)
+    let maxR = 0
+    let maxU = 0
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+          const v = new THREE.Vector3(sx * half.x, sy * half.y, sz * half.z)
+          maxR = Math.max(maxR, Math.abs(v.dot(right)))
+          maxU = Math.max(maxU, Math.abs(v.dot(up)))
+        }
+      }
+    }
     const aspect = this.size.w / this.size.h
     if (!Number.isFinite(aspect) || aspect <= 0) return
-    const margin = 1.15
-    const halfH = Math.max(size.z / 2, size.x / (2 * aspect)) * margin
-    const cam = this.orthoCamera
+    const halfH = Math.max(maxU, maxR / aspect) * SCENE_DEFAULTS.topFitMargin
     cam.left = -halfH * aspect
     cam.right = halfH * aspect
     cam.top = halfH
@@ -155,14 +195,20 @@ export class ViewRig {
     cam.updateProjectionMatrix()
   }
 
-  /** 俯视：正交相机位于户型正上方，OrbitControls 负责旋转/平移/缩放。 */
+  /** 默认俯视：45° 俯角、绕建筑中心，方位角 0（从南侧上空看向北）。 */
   private setTopView(): void {
     const center = this.bbox.getCenter(new THREE.Vector3())
     this.orbit.target.copy(center)
+    const polar = THREE.MathUtils.degToRad(SCENE_DEFAULTS.topDefaultPolarDeg)
+    const r = SCENE_DEFAULTS.topRadius
     this.orthoCamera.up.set(0, 1, 0)
-    // +0.001 避免 up 与视线方向平行时的万向锁，并保证平面「北」朝屏幕上方
-    this.orthoCamera.position.set(center.x, 30, center.z + 0.001)
+    this.orthoCamera.position.set(
+      center.x,
+      center.y + r * Math.cos(polar),
+      center.z + r * Math.sin(polar),
+    )
     this.orbit.update()
+    this.fitOrtho()
   }
 
   /** 与当前正交视野等效的透视机位（过渡起点，保证画面连续）。 */

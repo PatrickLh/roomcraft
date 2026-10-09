@@ -5,17 +5,25 @@ export const SCENE_DEFAULTS = {
   floorHeight: 2.8,
   /** 第一人称视高（米） */
   walkEyeHeight: 1.6,
-  /** 行走视场角（度）。室内空间感需要广角，45 会显得贴墙 */
-  walkFov: 60,
+  /** 行走视场角（度）。室内空间感需要广角，窄 fov 会显得贴墙、物体过大 */
+  walkFov: 68,
   /** 进入行走时的初始俯仰（度，略微向下看地面/家具） */
-  walkInitialPitchDeg: -6,
+  walkInitialPitchDeg: -8,
   /** 行走速度（米/秒） */
   walkSpeed: 2.4,
-  /** 俯视相机距地面的安全范围 */
-  topMinDistance: 4,
-  topMaxDistance: 60,
-  /** 俯视模式的极角上限（弧度）——允许绕竖轴旋转但保持近俯视 */
-  topMaxPolarAngle: 0.15,
+  /** 俯视（轨道）相机默认参数 */
+  /** 默认俯角（度）：从上往下 45°，用户可自行转动 */
+  topDefaultPolarDeg: 45,
+  /** 轨道半径（正交相机远置，避免裁切） */
+  topRadius: 60,
+  /** 极角范围（弧度）：允许从近俯视扫到近水平 */
+  topMinPolarAngle: 0.1,
+  topMaxPolarAngle: 1.45,
+  /** 轨道距离范围 */
+  topMinDistance: 6,
+  topMaxDistance: 150,
+  /** 视锥适配边距（投影包围盒后预留） */
+  topFitMargin: 1.2,
   /** 视角切换动画时长（毫秒） */
   transitionMs: 900,
   /** 行走时与墙体的最小间距（米，M0 简单钳制，无碰撞检测） */

@@ -46,6 +46,8 @@ onMounted(() => {
   resizeObserver = new ResizeObserver(onResize)
   resizeObserver.observe(host.value)
   onResize()
+  // 布局稳定后再适配一次（首帧时 flex 布局尺寸可能未就绪）
+  requestAnimationFrame(() => onResize())
 
   const clock = new THREE.Clock()
   const loop = (): void => {
@@ -74,6 +76,10 @@ async function toggleWalk(): Promise<void> {
   else if (store.viewMode === 'walk') await rig.exitWalk()
 }
 
+function resetTopView(): void {
+  rig?.resetTopView()
+}
+
 /** 场景截图（Spike B 的场景输入也来自这里）。 */
 function snapshot(): string | null {
   if (!renderer || !scene || !rig) return null
@@ -81,7 +87,7 @@ function snapshot(): string | null {
   return renderer.domElement.toDataURL('image/png')
 }
 
-defineExpose({ toggleWalk, snapshot })
+defineExpose({ toggleWalk, resetTopView, snapshot })
 </script>
 
 <template>

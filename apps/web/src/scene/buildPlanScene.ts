@@ -12,7 +12,7 @@ export interface BuiltScene {
   walkEntry: { pos: THREE.Vector3; yaw: number }
 }
 
-function computeBBox(plan: FloorPlan): THREE.Box3 {
+function computeBBox(plan: FloorPlan, floorHeight: number): THREE.Box3 {
   const pts: THREE.Vector3[] = []
   for (const w of plan.walls) {
     pts.push(planToWorld(w.p1), planToWorld(w.p2))
@@ -20,7 +20,10 @@ function computeBBox(plan: FloorPlan): THREE.Box3 {
   for (const r of plan.rooms) {
     for (const p of r.polygon ?? []) pts.push(planToWorld(p))
   }
-  return new THREE.Box3().setFromPoints(pts)
+  const bbox = new THREE.Box3().setFromPoints(pts)
+  // 计入墙体高度：倾斜视角的视锥适配需要真实三维包围盒
+  bbox.max.y = floorHeight
+  return bbox
 }
 
 function makeLabelSprite(text: string): THREE.Sprite {
@@ -52,7 +55,7 @@ function makeLabelSprite(text: string): THREE.Sprite {
 export function buildPlanScene(plan: FloorPlan): BuiltScene {
   const floorHeight = plan.meta.floorHeight ?? SCENE_DEFAULTS.floorHeight
   const group = new THREE.Group()
-  const bbox = computeBBox(plan)
+  const bbox = computeBBox(plan, floorHeight)
 
   // 地面基板（略大于户型）
   const size = bbox.getSize(new THREE.Vector3())
