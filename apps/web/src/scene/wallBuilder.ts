@@ -13,7 +13,17 @@ export function planToWorld(p: { x: number; y: number }): THREE.Vector3 {
   return new THREE.Vector3(p.x, 0, p.y)
 }
 
-const WALL_MATERIAL = new THREE.MeshStandardMaterial({ color: COLORS.wall, roughness: 0.95 })
+const WALL_SIDE_MATERIAL = new THREE.MeshStandardMaterial({ color: COLORS.wall, roughness: 0.95 })
+const WALL_TOP_MATERIAL = new THREE.MeshStandardMaterial({ color: COLORS.wallTop, roughness: 0.9 })
+// BoxGeometry 面序：+x, -x, +y, -y, +z, -z —— 顶面（+y）用深色，俯视时墙体清晰可读
+const WALL_MATERIALS = [
+  WALL_SIDE_MATERIAL,
+  WALL_SIDE_MATERIAL,
+  WALL_TOP_MATERIAL,
+  WALL_SIDE_MATERIAL,
+  WALL_SIDE_MATERIAL,
+  WALL_SIDE_MATERIAL,
+]
 const GLASS_MATERIAL = new THREE.MeshStandardMaterial({
   color: COLORS.glass,
   roughness: 0.15,
@@ -32,13 +42,18 @@ function addBox(
   kind: 'wall' | 'glass',
 ): void {
   const geometry = new THREE.BoxGeometry(Math.max(x1 - x0, 1e-4), Math.max(y1 - y0, 1e-4), kind === 'glass' ? thickness * 0.15 : thickness)
-  const mesh = new THREE.Mesh(geometry, kind === 'glass' ? GLASS_MATERIAL : WALL_MATERIAL)
+  const material = kind === 'glass' ? GLASS_MATERIAL : WALL_MATERIALS
+  const mesh = new THREE.Mesh(geometry, material)
   mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0)
   mesh.userData = { kind }
   group.add(mesh)
 }
 
-/** 把一面墙（含开口）构建为一个 Group：不透明墙段 + 门洞留空 + 窗玻璃。 */
+/** 把一面墙（含开口）构建为一个 Group：不透明墙段 + 门洞留空 + 窗玻璃。
+
+Group 定位在墙起点 p1，局部 +X 沿墙轴指向 p2；盒段用 0..L 局部坐标构建。
+注意：不能定位在中点——盒段原点在墙起点，中点定位会整体偏移 L/2（已由回归测试守护）。
+*/
 export function buildWall(wall: Wall, floorHeight: number = SCENE_DEFAULTS.floorHeight): THREE.Group {
   const p1 = planToWorld(wall.p1)
   const p2 = planToWorld(wall.p2)
@@ -46,7 +61,7 @@ export function buildWall(wall: Wall, floorHeight: number = SCENE_DEFAULTS.floor
 
   const group = new THREE.Group()
   group.userData = { wallId: wall.id, length }
-  group.position.copy(p1.clone().add(p2).multiplyScalar(0.5))
+  group.position.copy(p1)
   group.rotation.y = -Math.atan2(p2.z - p1.z, p2.x - p1.x)
 
   const ops: Opening[] = [...wall.openings].sort((a, b) => a.t - b.t)

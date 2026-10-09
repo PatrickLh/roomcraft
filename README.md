@@ -2,8 +2,8 @@
 
 上传户型图 → AI 结构化解析 → 确定性生成可编辑 3D 户型 → 俯视编辑家具 / 3D 实时观察 → 风格参考图生成效果图。
 
-- 需求与决策：[`docs/v1.0.md`](docs/v1.0.md)
-- 执行计划：[`plans/v1.0.md`](plans/v1.0.md)（当前阶段：**M0 验证关键不确定性**）
+- 需求与决策：[`docs/v1.0/requirement.md`](docs/v1.0/requirement.md)
+- 执行计划：[`docs/v1.0/plan.md`](docs/v1.0/plan.md)（当前阶段：**M0 验证关键不确定性**）
 
 ## 仓库结构
 
@@ -48,7 +48,7 @@ pnpm samples:synth          # 生成合成冒烟样本（可选）
 3. `pnpm spike:a` → 按 `spikes/eval/scoring-rubric.md` 人工评分（电子图可用率目标 ≥ 80%）；
 4. `pnpm dev:web` → 「导出截图」得到场景图 → `pnpm spike:b -- --scene <截图> --style <风格图>`
    → 人工评分（主观可用率目标 ≥ 60%）；
-5. 全部结果与成本记录进 `spikes/reports/`，按 plans/v1.0.md M0-06 评审后决定推进或调整。
+5. 全部结果与成本记录进 `spikes/reports/`，按 docs/v1.0/plan.md M0-06 评审后决定推进或调整。
 
 ## 环境约束（PRD 已定，开发时遵守）
 

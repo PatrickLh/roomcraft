@@ -67,7 +67,7 @@ describe('wallBuilder（墙段 + 门窗洞分解）', () => {
     expect(g.parameters.height).toBeCloseTo(northWin.height)
   })
 
-  it('墙 Group 定位于墙轴中点并朝向墙轴', () => {
+  it('墙 Group 定位于墙起点 p1，userData.length 正确', () => {
     const wall: Wall = {
       id: 'w-rot',
       p1: { x: 0, y: 0 },
@@ -77,7 +77,44 @@ describe('wallBuilder（墙段 + 门窗洞分解）', () => {
     }
     const group = buildWall(wall, FLOOR_H)
     expect(group.position.x).toBeCloseTo(0)
-    expect(group.position.z).toBeCloseTo(3)
+    expect(group.position.z).toBeCloseTo(0)
     expect(group.userData.length).toBeCloseTo(6)
+  })
+
+  it('回归：墙体世界包围盒与 p1→p2 一致（防御沿轴偏移 L/2）', () => {
+    const cases: Wall[] = [
+      { id: 'w-a', p1: { x: 0, y: 0 }, p2: { x: 10.2, y: 0 }, thickness: 0.24, openings: [] },
+      { id: 'w-b', p1: { x: 0, y: 8.4 }, p2: { x: 0, y: 0 }, thickness: 0.24, openings: [] },
+      { id: 'w-c', p1: { x: 1, y: 2 }, p2: { x: 5, y: 2 }, thickness: 0.12, openings: [] },
+      {
+        id: 'w-d',
+        p1: { x: 0, y: 0 },
+        p2: { x: 4, y: 0 },
+        thickness: 0.2,
+        openings: [{ id: 'o-1', type: 'door', t: 1, width: 0.9, height: 2.05, sill: 0 }],
+      },
+    ]
+    for (const wall of cases) {
+      const group = buildWall(wall, FLOOR_H)
+      const box = new THREE.Box3()
+      for (const child of group.children) {
+        child.updateWorldMatrix(true, false)
+        box.expandByObject(child)
+      }
+      const t = wall.thickness / 2
+      const dx = Math.abs(wall.p2.x - wall.p1.x)
+      const dz = Math.abs(wall.p2.y - wall.p1.y)
+      // 厚度只作用于垂直于墙轴的方向（斜墙用 t 界定上界，仍能捕捉 L/2 级偏移）
+      const padX = dx >= dz ? (dx === dz ? t : 0) : t
+      const padZ = dx >= dz ? t : 0
+      const minX = Math.min(wall.p1.x, wall.p2.x)
+      const maxX = Math.max(wall.p1.x, wall.p2.x)
+      const minY = Math.min(wall.p1.y, wall.p2.y)
+      const maxY = Math.max(wall.p1.y, wall.p2.y)
+      expect(box.min.x).toBeCloseTo(minX - padX, 3)
+      expect(box.max.x).toBeCloseTo(maxX + padX, 3)
+      expect(box.min.z).toBeCloseTo(minY - padZ, 3)
+      expect(box.max.z).toBeCloseTo(maxY + padZ, 3)
+    }
   })
 })

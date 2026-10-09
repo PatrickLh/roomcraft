@@ -1,4 +1,9 @@
-/** 双视角控制：俯视（OrbitControls，可绕竖轴旋转）⇄ 行走（拖动视角 + WASD），带平滑过渡。 */
+/** 双视角控制：俯视（正交相机，可绕竖轴旋转）⇄ 行走（透视相机，拖动视角 + WASD），带平滑过渡。
+
+手势约定（触摸板友好，同地图类产品）：
+- 俯视：左键拖动 = 旋转（绕竖轴）；双指滚动 = 平移；捏合 / Ctrl+滚轮 = 朝光标缩放
+- 行走：拖动 = 转视角；W/S/A/D 或方向键 = 移动
+*/
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
@@ -6,11 +11,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { SCENE_DEFAULTS } from './config'
 
 export type RigMode = 'top' | 'walk' | 'transition'
-
-interface Pose {
-  pos: THREE.Vector3
-  target: THREE.Vector3
-}
 
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
@@ -23,13 +23,19 @@ function lookQuat(from: THREE.Vector3, to: THREE.Vector3): THREE.Quaternion {
 
 export class ViewRig {
   mode: RigMode = 'top'
+  /** 行走与过渡动画用透视相机 */
+  readonly perspCamera: THREE.PerspectiveCamera
+  /** 俯视用正交相机（平面图标准投影，无透视歪斜） */
+  readonly orthoCamera: THREE.OrthographicCamera
+
+  private active: 'ortho' | 'persp' = 'ortho'
   private readonly orbit: OrbitControls
   private readonly bbox: THREE.Box3
   private readonly walkEntry: { pos: THREE.Vector3; yaw: number }
   private readonly onModeChange?: (m: RigMode) => void
   private readonly disposers: Array<() => void> = []
+  private readonly size = { w: 1, h: 1 }
 
-  private topPose: Pose | null = null
   private walkYaw = 0
   private walkPitch = 0
   private readonly keys = new Set<string>()
@@ -45,7 +51,6 @@ export class ViewRig {
   } | null = null
 
   constructor(
-    private camera: THREE.PerspectiveCamera,
     dom: HTMLElement,
     bbox: THREE.Box3,
     walkEntry: { pos: THREE.Vector3; yaw: number },
@@ -55,13 +60,18 @@ export class ViewRig {
     this.walkEntry = walkEntry
     this.onModeChange = onModeChange
 
-    this.orbit = new OrbitControls(camera, dom)
+    this.perspCamera = new THREE.PerspectiveCamera(SCENE_DEFAULTS.walkFov, 1, 0.1, 300)
+    this.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 120)
+
+    this.orbit = new OrbitControls(this.orthoCamera, dom)
     this.orbit.enableDamping = true
     this.orbit.dampingFactor = 0.08
     this.orbit.maxPolarAngle = SCENE_DEFAULTS.topMaxPolarAngle
     this.orbit.minPolarAngle = 0
-    this.orbit.minDistance = SCENE_DEFAULTS.topMinDistance
-    this.orbit.maxDistance = SCENE_DEFAULTS.topMaxDistance
+    this.orbit.rotateSpeed = 0.9
+    this.orbit.panSpeed = 1.0
+    this.orbit.zoomSpeed = 0.7
+    this.orbit.zoomToCursor = true // 缩放朝向光标位置
 
     const onKeyDown = (e: KeyboardEvent): void => {
       if (this.mode !== 'walk') return
@@ -82,10 +92,21 @@ export class ViewRig {
       this.drag = { x: e.clientX, y: e.clientY }
       this.walkYaw -= dx * 0.005
       this.walkPitch = THREE.MathUtils.clamp(this.walkPitch - dy * 0.005, -1.2, 1.2)
-      this.camera.quaternion.setFromEuler(new THREE.Euler(this.walkPitch, this.walkYaw, 0, 'YXZ'))
+      this.perspCamera.quaternion.setFromEuler(new THREE.Euler(this.walkPitch, this.walkYaw, 0, 'YXZ'))
     }
     const onPointerUp = (): void => {
       this.drag = null
+    }
+    // 触摸板手势重映射：双指滚动（无 Ctrl）→ 平移；捏合（Ctrl+滚轮）→ 交给 OrbitControls 缩放
+    const onWheel = (e: WheelEvent): void => {
+      if (this.mode !== 'top') {
+        e.preventDefault()
+        return
+      }
+      if (e.ctrlKey) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      this.panBy(e.deltaX, e.deltaY)
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -93,65 +114,102 @@ export class ViewRig {
     dom.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
+    dom.addEventListener('wheel', onWheel, { passive: false, capture: true })
     this.disposers.push(() => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       dom.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
+      dom.removeEventListener('wheel', onWheel, { capture: true })
     })
 
     this.setTopView()
     this.setMode('top')
   }
 
-  private setMode(m: RigMode): void {
-    this.mode = m
-    this.onModeChange?.(m)
+  get activeCamera(): THREE.Camera {
+    return this.active === 'ortho' ? this.orthoCamera : this.perspCamera
   }
 
-  /** 俯视：相机位于户型上方，OrbitControls 负责旋转/缩放/平移。 */
+  resize(w: number, h: number): void {
+    this.size.w = w
+    this.size.h = h
+    this.perspCamera.aspect = w / h
+    this.perspCamera.updateProjectionMatrix()
+    this.fitOrtho()
+  }
+
+  /** 俯视视锥按户型包围盒 + 视口宽高比自适应，保证居中铺满（留边）。 */
+  private fitOrtho(): void {
+    const size = this.bbox.getSize(new THREE.Vector3())
+    const aspect = this.size.w / this.size.h
+    if (!Number.isFinite(aspect) || aspect <= 0) return
+    const margin = 1.15
+    const halfH = Math.max(size.z / 2, size.x / (2 * aspect)) * margin
+    const cam = this.orthoCamera
+    cam.left = -halfH * aspect
+    cam.right = halfH * aspect
+    cam.top = halfH
+    cam.bottom = -halfH
+    cam.updateProjectionMatrix()
+  }
+
+  /** 俯视：正交相机位于户型正上方，OrbitControls 负责旋转/平移/缩放。 */
   private setTopView(): void {
     const center = this.bbox.getCenter(new THREE.Vector3())
-    const size = this.bbox.getSize(new THREE.Vector3())
-    const dist = Math.max(size.x, size.z) * 1.05 + SCENE_DEFAULTS.topMinDistance
-    this.camera.up.set(0, 1, 0)
     this.orbit.target.copy(center)
-    // +0.001 避免 up 与视线方向平行时的万向锁
-    this.camera.position.set(center.x, dist, center.z + 0.001)
+    this.orthoCamera.up.set(0, 1, 0)
+    // +0.001 避免 up 与视线方向平行时的万向锁，并保证平面「北」朝屏幕上方
+    this.orthoCamera.position.set(center.x, 30, center.z + 0.001)
     this.orbit.update()
-    this.topPose = { pos: this.camera.position.clone(), target: center.clone() }
+  }
+
+  /** 与当前正交视野等效的透视机位（过渡起点，保证画面连续）。 */
+  private mimicTopPose(): { pos: THREE.Vector3; target: THREE.Vector3 } {
+    const cam = this.orthoCamera
+    const target = this.orbit.target.clone()
+    const dir = cam.position.clone().sub(target).normalize()
+    const visibleH = (cam.top - cam.bottom) / cam.zoom
+    const d = visibleH / (2 * Math.tan(THREE.MathUtils.degToRad(this.perspCamera.fov / 2)))
+    return { pos: target.clone().add(dir.multiplyScalar(d)), target }
   }
 
   enterWalk(): Promise<void> {
     if (this.mode !== 'top') return Promise.resolve()
-    this.topPose = { pos: this.camera.position.clone(), target: this.orbit.target.clone() }
     this.orbit.enabled = false
+    const mimic = this.mimicTopPose()
+    this.perspCamera.up.set(0, 1, 0)
+    this.perspCamera.position.copy(mimic.pos)
+    this.perspCamera.quaternion.copy(lookQuat(mimic.pos, mimic.target))
+
     this.walkYaw = this.walkEntry.yaw
-    this.walkPitch = 0
-    const forward = new THREE.Vector3(-Math.sin(this.walkYaw), 0, -Math.cos(this.walkYaw))
-    const toQ = lookQuat(this.walkEntry.pos, this.walkEntry.pos.clone().add(forward))
+    this.walkPitch = THREE.MathUtils.degToRad(SCENE_DEFAULTS.walkInitialPitchDeg)
+    const toQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(this.walkPitch, this.walkYaw, 0, 'YXZ'))
     return this.animateTo(
-      this.camera.position.clone(),
-      this.camera.quaternion.clone(),
+      this.perspCamera.position.clone(),
+      this.perspCamera.quaternion.clone(),
       this.walkEntry.pos.clone(),
       toQ,
-      () => this.setMode('walk'),
+      () => {
+        this.active = 'persp'
+        this.setMode('walk')
+      },
     )
   }
 
   exitWalk(): Promise<void> {
-    if (this.mode !== 'walk' || !this.topPose) return Promise.resolve()
-    this.orbit.enabled = false
+    if (this.mode !== 'walk') return Promise.resolve()
     this.keys.clear()
-    const toQ = lookQuat(this.topPose.pos, this.topPose.target)
+    const mimic = this.mimicTopPose()
+    const toQ = lookQuat(mimic.pos, mimic.target)
     return this.animateTo(
-      this.camera.position.clone(),
-      this.camera.quaternion.clone(),
-      this.topPose.pos.clone(),
+      this.perspCamera.position.clone(),
+      this.perspCamera.quaternion.clone(),
+      mimic.pos.clone(),
       toQ,
       () => {
-        this.orbit.target.copy(this.topPose!.target)
+        this.active = 'ortho'
         this.setMode('top')
         this.orbit.enabled = true
         this.orbit.update()
@@ -167,7 +225,15 @@ export class ViewRig {
     onDone: () => void,
   ): Promise<void> {
     this.setMode('transition')
-    this.tween = { fromPos, toPos, fromQ, toQ, start: performance.now(), dur: SCENE_DEFAULTS.transitionMs, onDone }
+    this.tween = {
+      fromPos,
+      toPos,
+      fromQ,
+      toQ,
+      start: performance.now(),
+      dur: SCENE_DEFAULTS.transitionMs,
+      onDone,
+    }
     return new Promise((resolve) => {
       const prev = this.tween!.onDone
       this.tween!.onDone = () => {
@@ -177,12 +243,34 @@ export class ViewRig {
     })
   }
 
+  /** 双指滚动平移：世界坐标随手指移动（保持在地平面内）。 */
+  private panBy(dx: number, dy: number): void {
+    const cam = this.orthoCamera
+    const worldPerPx = (cam.top - cam.bottom) / (cam.zoom * this.size.h)
+    if (!Number.isFinite(worldPerPx) || worldPerPx <= 0) return
+    const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0)
+    const up = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1)
+    right.y = 0
+    up.y = 0
+    if (right.lengthSq() < 1e-8 || up.lengthSq() < 1e-8) return
+    right.normalize()
+    up.normalize()
+    const delta = right.multiplyScalar(-dx * worldPerPx).add(up.multiplyScalar(dy * worldPerPx))
+    cam.position.add(delta)
+    this.orbit.target.add(delta)
+  }
+
+  private setMode(m: RigMode): void {
+    this.mode = m
+    this.onModeChange?.(m)
+  }
+
   update(dt: number): void {
     if (this.tween) {
       const t = Math.min((performance.now() - this.tween.start) / this.tween.dur, 1)
       const k = easeInOutCubic(t)
-      this.camera.position.lerpVectors(this.tween.fromPos, this.tween.toPos, k)
-      this.camera.quaternion.slerpQuaternions(this.tween.fromQ, this.tween.toQ, k)
+      this.perspCamera.position.lerpVectors(this.tween.fromPos, this.tween.toPos, k)
+      this.perspCamera.quaternion.slerpQuaternions(this.tween.fromQ, this.tween.toQ, k)
       if (t >= 1) {
         const done = this.tween.onDone
         this.tween = null
@@ -193,7 +281,7 @@ export class ViewRig {
     if (this.mode === 'top') {
       this.orbit.update()
     } else if (this.mode === 'walk') {
-      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion)
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.perspCamera.quaternion)
       forward.y = 0
       forward.normalize()
       const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0))
@@ -204,12 +292,20 @@ export class ViewRig {
       if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) move.add(right)
       if (move.lengthSq() > 0) {
         move.normalize().multiplyScalar(SCENE_DEFAULTS.walkSpeed * dt)
-        this.camera.position.add(move)
+        this.perspCamera.position.add(move)
         // M0 无碰撞检测：钳制在户型包围盒内
         const m = SCENE_DEFAULTS.walkMargin
-        this.camera.position.x = THREE.MathUtils.clamp(this.camera.position.x, this.bbox.min.x + m, this.bbox.max.x - m)
-        this.camera.position.z = THREE.MathUtils.clamp(this.camera.position.z, this.bbox.min.z + m, this.bbox.max.z - m)
-        this.camera.position.y = SCENE_DEFAULTS.walkEyeHeight
+        this.perspCamera.position.x = THREE.MathUtils.clamp(
+          this.perspCamera.position.x,
+          this.bbox.min.x + m,
+          this.bbox.max.x - m,
+        )
+        this.perspCamera.position.z = THREE.MathUtils.clamp(
+          this.perspCamera.position.z,
+          this.bbox.min.z + m,
+          this.bbox.max.z - m,
+        )
+        this.perspCamera.position.y = SCENE_DEFAULTS.walkEyeHeight
       }
     }
   }

@@ -102,11 +102,31 @@ export function buildPlanScene(plan: FloorPlan): BuiltScene {
   dir.target.position.copy(center)
   group.add(dir, dir.target)
 
-  // 行走入口：第一个带标签的房间，面向户型中心
-  const labeled = plan.rooms.find((r) => r.labelPosition)
+  // 行走入口：第一个带标签的房间；视线沿房间长轴、朝入口一侧空间更足的方向，
+  // 避免开局怼墙角。无多边形时退化为朝户型中心。
+  const labeled = plan.rooms.find((r) => r.labelPosition) ?? plan.rooms[0]
   const entryPt = labeled?.labelPosition ?? { x: center.x, y: center.z }
-  const dx = center.x - entryPt.x
-  const dz = center.z - entryPt.y
+  let dx = center.x - entryPt.x
+  let dz = center.z - entryPt.y
+  if (labeled?.polygon?.length) {
+    let minX = Infinity
+    let maxX = -Infinity
+    let minZ = Infinity
+    let maxZ = -Infinity
+    for (const p of labeled.polygon) {
+      minX = Math.min(minX, p.x)
+      maxX = Math.max(maxX, p.x)
+      minZ = Math.min(minZ, p.y)
+      maxZ = Math.max(maxZ, p.y)
+    }
+    if (maxX - minX >= maxZ - minZ) {
+      dx = (entryPt.x >= (minX + maxX) / 2 ? minX : maxX) - entryPt.x
+      dz = 0
+    } else {
+      dx = 0
+      dz = (entryPt.y >= (minZ + maxZ) / 2 ? minZ : maxZ) - entryPt.y
+    }
+  }
   const yaw = Math.abs(dx) + Math.abs(dz) < 1e-6 ? 0 : Math.atan2(-dx, -dz)
   const walkEntry = {
     pos: new THREE.Vector3(entryPt.x, SCENE_DEFAULTS.walkEyeHeight, entryPt.y),

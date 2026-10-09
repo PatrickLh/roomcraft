@@ -5,6 +5,10 @@ export const SCENE_DEFAULTS = {
   floorHeight: 2.8,
   /** 第一人称视高（米） */
   walkEyeHeight: 1.6,
+  /** 行走视场角（度）。室内空间感需要广角，45 会显得贴墙 */
+  walkFov: 60,
+  /** 进入行走时的初始俯仰（度，略微向下看地面/家具） */
+  walkInitialPitchDeg: -6,
   /** 行走速度（米/秒） */
   walkSpeed: 2.4,
   /** 俯视相机距地面的安全范围 */
@@ -19,7 +23,10 @@ export const SCENE_DEFAULTS = {
 } as const
 
 export const COLORS = {
+  /** 墙侧边（行走视角看到的内墙面） */
   wall: 0xe9e4da,
+  /** 墙顶（俯视时的墙体截面，建筑图纸惯例用深色保证可读性） */
+  wallTop: 0x566068,
   glass: 0x9fc7e8,
   ground: 0xd9dee3,
   grid: 0xc3cad1,

@@ -12,18 +12,16 @@ const store = useAppStore()
 
 let renderer: THREE.WebGLRenderer | null = null
 let scene: THREE.Scene | null = null
-let camera: THREE.PerspectiveCamera | null = null
 let rig: ViewRig | null = null
 let raf = 0
 let resizeObserver: ResizeObserver | null = null
 
 function onResize(): void {
-  if (!host.value || !renderer || !camera) return
+  if (!host.value || !renderer) return
   const w = host.value.clientWidth
   const h = host.value.clientHeight
   renderer.setSize(w, h, false)
-  camera.aspect = w / h
-  camera.updateProjectionMatrix()
+  rig?.resize(w, h)
 }
 
 onMounted(() => {
@@ -37,12 +35,11 @@ onMounted(() => {
   const built = buildPlanScene(plan)
   scene.add(built.group)
 
-  camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200)
   renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   host.value.appendChild(renderer.domElement)
 
-  rig = new ViewRig(camera, renderer.domElement, built.bbox, built.walkEntry, (m) => {
+  rig = new ViewRig(renderer.domElement, built.bbox, built.walkEntry, (m) => {
     store.viewMode = m
   })
 
@@ -54,7 +51,7 @@ onMounted(() => {
   const loop = (): void => {
     raf = requestAnimationFrame(loop)
     rig?.update(clock.getDelta())
-    if (renderer && scene && camera) renderer.render(scene, camera)
+    if (renderer && scene && rig) renderer.render(scene, rig.activeCamera)
   }
   loop()
 
@@ -79,8 +76,8 @@ async function toggleWalk(): Promise<void> {
 
 /** 场景截图（Spike B 的场景输入也来自这里）。 */
 function snapshot(): string | null {
-  if (!renderer || !scene || !camera) return null
-  renderer.render(scene, camera)
+  if (!renderer || !scene || !rig) return null
+  renderer.render(scene, rig.activeCamera)
   return renderer.domElement.toDataURL('image/png')
 }
 
@@ -89,7 +86,9 @@ defineExpose({ toggleWalk, snapshot })
 
 <template>
   <div ref="host" class="canvas-host">
-    <div v-if="store.viewMode === 'top'" class="hint">拖动旋转 · 滚轮缩放 · 右键平移</div>
+    <div v-if="store.viewMode === 'top'" class="hint">
+      左键拖动旋转 · 双指滚动平移 · 捏合 / Ctrl+滚轮缩放
+    </div>
     <div v-else-if="store.viewMode === 'walk'" class="hint">拖动转视角 · W/S/A/D 或方向键移动</div>
   </div>
 </template>
