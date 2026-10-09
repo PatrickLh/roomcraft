@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from fastapi import FastAPI
 
 from app.config import get_settings
+from app.plan.recognition import router as recognition_router
 from app.providers import vision_ready
 
 VERSION = "0.1.0"
@@ -12,6 +13,7 @@ VERSION = "0.1.0"
 
 def create_app() -> FastAPI:
     app = FastAPI(title="RoomCraft API", version=VERSION)
+    app.include_router(recognition_router)
 
     @app.get("/api/health")
     async def health() -> dict:

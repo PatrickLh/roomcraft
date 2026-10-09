@@ -1,7 +1,7 @@
 /** 双视角控制：俯视（正交相机，可绕竖轴旋转）⇄ 行走（透视相机，拖动视角 + WASD），带平滑过渡。
 
 手势约定（触摸板友好，同地图类产品）：
-- 俯视：左键拖动 = 旋转（绕竖轴）；双指滚动 = 平移；捏合 / Ctrl+滚轮 = 朝光标缩放
+- 俯视：左键拖动 = 平移；右键 / Shift+左键 = 旋转；双指滚动 = 平移；捏合 / Ctrl+滚轮 = 围绕视野中心缩放
 - 行走：拖动 = 转视角；W/S/A/D 或方向键 = 移动
 */
 
@@ -35,6 +35,7 @@ export class ViewRig {
   private readonly onModeChange?: (m: RigMode) => void
   private readonly disposers: Array<() => void> = []
   private readonly size = { w: 1, h: 1 }
+  private hasViewport = false
 
   private walkYaw = 0
   private walkPitch = 0
@@ -64,22 +65,25 @@ export class ViewRig {
     this.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 120)
 
     this.orbit = new OrbitControls(this.orthoCamera, dom)
-    this.orbit.enableDamping = true
-    this.orbit.dampingFactor = 0.08
-    // 极角放开：默认 45° 俯角，可从近俯视扫到近水平；方位角 360° 无限制
+    this.orbit.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
+    this.orbit.minZoom = 0.2
+    this.orbit.maxZoom = 8
+    this.orbit.enableDamping = false
+    // 极角放开：默认接近垂直俯视，可从近俯视扫到近水平；方位角 360° 无限制
     this.orbit.minPolarAngle = SCENE_DEFAULTS.topMinPolarAngle
     this.orbit.maxPolarAngle = SCENE_DEFAULTS.topMaxPolarAngle
     this.orbit.minDistance = SCENE_DEFAULTS.topMinDistance
     this.orbit.maxDistance = SCENE_DEFAULTS.topMaxDistance
     this.orbit.rotateSpeed = 0.9
     this.orbit.panSpeed = 1.0
+    this.orbit.screenSpacePanning = false
     this.orbit.zoomSpeed = 0.7
     // 注意：不启用 zoomToCursor——它会把轨道中心挪到光标处，
     // 导致后续旋转不再绕建筑中心（用户可感知的「转轴不对」）
     this.orbit.zoomToCursor = false
 
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (this.mode !== 'walk') return
+      if (this.mode !== 'walk' || e.target instanceof HTMLElement && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName))) return
       this.keys.add(e.code)
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault()
     }
@@ -87,7 +91,8 @@ export class ViewRig {
       this.keys.delete(e.code)
     }
     const onPointerDown = (e: PointerEvent): void => {
-      if (this.mode !== 'walk') return
+      if (this.mode !== 'walk' || e.button !== 0) return
+      dom.setPointerCapture(e.pointerId)
       this.drag = { x: e.clientX, y: e.clientY }
     }
     const onPointerMove = (e: PointerEvent): void => {
@@ -102,17 +107,29 @@ export class ViewRig {
     const onPointerUp = (): void => {
       this.drag = null
     }
-    // 触摸板手势重映射：双指滚动（无 Ctrl）→ 平移；捏合（Ctrl+滚轮）→ 交给 OrbitControls 缩放
+    // 接管 wheel，避免 OrbitControls 对触摸板捏合额外放大十倍。
     const onWheel = (e: WheelEvent): void => {
-      if (this.mode !== 'top') {
-        e.preventDefault()
-        return
-      }
-      if (e.ctrlKey) return
       e.preventDefault()
       e.stopImmediatePropagation()
-      this.panBy(e.deltaX, e.deltaY)
+      if (this.mode !== 'top') return
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? this.size.h : 1
+      if (e.ctrlKey || e.metaKey) {
+        this.orthoCamera.zoom = THREE.MathUtils.clamp(
+          this.orthoCamera.zoom * Math.exp(-e.deltaY * unit * 0.01),
+          this.orbit.minZoom, this.orbit.maxZoom,
+        )
+        this.orthoCamera.updateProjectionMatrix()
+      } else {
+        this.panBy(e.deltaX * unit, e.deltaY * unit)
+      }
     }
+    const clearInput = (): void => { this.keys.clear(); this.drag = null }
+    window.addEventListener('blur', clearInput)
+    window.addEventListener('pointercancel', onPointerUp)
+    this.disposers.push(() => {
+      window.removeEventListener('blur', clearInput)
+      window.removeEventListener('pointercancel', onPointerUp)
+    })
 
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
@@ -138,14 +155,18 @@ export class ViewRig {
   }
 
   resize(w: number, h: number): void {
+    if (w <= 0 || h <= 0) return
+    const firstResize = !this.hasViewport
+    this.hasViewport = true
     this.size.w = w
     this.size.h = h
     this.perspCamera.aspect = w / h
     this.perspCamera.updateProjectionMatrix()
-    this.fitOrtho()
+    if (firstResize) this.setTopView()
+    else this.fitOrtho()
   }
 
-  /** 回到默认俯视：45° 俯角、以建筑中心为轴、重新适配视锥。 */
+  /** 回到默认俯视：重置缩放、建筑中心及视锥。 */
   resetTopView(): void {
     if (this.mode !== 'top') return
     this.setTopView()
@@ -195,8 +216,9 @@ export class ViewRig {
     cam.updateProjectionMatrix()
   }
 
-  /** 默认俯视：45° 俯角、绕建筑中心，方位角 0（从南侧上空看向北）。 */
+  /** 默认俯视：接近垂直的上帝视角、绕建筑中心，方位角 0（从南侧上空看向北）。 */
   private setTopView(): void {
+    this.orthoCamera.zoom = 1
     const center = this.bbox.getCenter(new THREE.Vector3())
     this.orbit.target.copy(center)
     const polar = THREE.MathUtils.degToRad(SCENE_DEFAULTS.topDefaultPolarDeg)
@@ -270,6 +292,8 @@ export class ViewRig {
     toQ: THREE.Quaternion,
     onDone: () => void,
   ): Promise<void> {
+    this.drag = null
+    this.active = 'persp'
     this.setMode('transition')
     this.tween = {
       fromPos,
@@ -300,7 +324,8 @@ export class ViewRig {
     up.y = 0
     if (right.lengthSq() < 1e-8 || up.lengthSq() < 1e-8) return
     right.normalize()
-    up.normalize()
+    // 地平面位移投影后仍应等于原始屏幕像素位移。
+    up.divideScalar(up.lengthSq())
     const delta = right.multiplyScalar(-dx * worldPerPx).add(up.multiplyScalar(dy * worldPerPx))
     cam.position.add(delta)
     this.orbit.target.add(delta)
@@ -337,7 +362,7 @@ export class ViewRig {
       if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) move.sub(right)
       if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) move.add(right)
       if (move.lengthSq() > 0) {
-        move.normalize().multiplyScalar(SCENE_DEFAULTS.walkSpeed * dt)
+        move.normalize().multiplyScalar(SCENE_DEFAULTS.walkSpeed * Math.min(dt, 0.1))
         this.perspCamera.position.add(move)
         // M0 无碰撞检测：钳制在户型包围盒内
         const m = SCENE_DEFAULTS.walkMargin

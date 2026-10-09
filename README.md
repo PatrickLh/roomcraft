@@ -32,14 +32,22 @@ pnpm samples:synth          # 生成合成冒烟样本（可选）
 
 | 命令 | 说明 |
 |---|---|
-| `pnpm dev:web` | 启动前端原型（俯视/行走双视角） |
+| `pnpm dev:web` | 启动首页、上传页及俯视/行走预览工作台 |
 | `pnpm build:web` / `pnpm typecheck:web` / `pnpm test:web` | 构建 / 类型检查 / vitest |
-| `pnpm server:dev` | 启动后端（:8787，/api/health、/api/providers） |
+| `pnpm server:dev` | 启动后端（:8787，健康检查、Provider 状态及图片识别接口） |
 | `pnpm server:test` / `pnpm server:lint` | pytest / ruff |
 | `pnpm schema:check` | Python 侧校验全部 fixtures |
 | `pnpm schema:codegen` | Schema → TS 类型（提交产物，CI 校验无漂移） |
 | `pnpm schema:codegen:py` | Schema → Pydantic 模型（M1 接入） |
 | `pnpm spike:a` / `pnpm spike:b` / `pnpm spike:smoke` | Spike 验证 / mock 冒烟 |
+
+## Web 体验流程
+
+同时启动 `pnpm server:dev` 和 `pnpm dev:web`。首页可直接体验示例，也可上传 JPG / PNG / WebP（最大 10 MB、2400 万像素），点击生成后进入预览。默认接近垂直俯视，支持平移、旋转、缩放、行走、对照原图及导出截图。
+
+前端开发服务将 `/api` 代理到本机 `:8787`；部署时需由同源反向代理提供该路径。`POST /api/plans/recognize` 接受图片二进制，返回经结构及语义校验的户型。识别使用后端配置的视觉 Provider；选择 mock 时页面显式提示模拟结果，不代表真实图片识别。缺少配置或识别失败时保留原图并提示重试。
+
+此接口目前用于本地原型验证，尚未接入 M1 的数据库配额、异步任务及云存储，不应据此视为公开服务已经完成。刷新预览页会恢复示例，当前上传结果尚未持久化。
 
 ## Spike 真实验证（M0 核心）
 

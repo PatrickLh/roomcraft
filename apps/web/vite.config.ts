@@ -12,6 +12,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    proxy: { '/api': 'http://127.0.0.1:8787' },
     // 允许 dev server 引用 monorepo 内其他包（shared-schema 的 schema 与 fixtures）
     fs: { allow: ['../..'] },
   },

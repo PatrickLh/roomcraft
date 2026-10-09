@@ -15,7 +15,10 @@ export interface BuiltScene {
 function computeBBox(plan: FloorPlan, floorHeight: number): THREE.Box3 {
   const pts: THREE.Vector3[] = []
   for (const w of plan.walls) {
-    pts.push(planToWorld(w.p1), planToWorld(w.p2))
+    const half = w.thickness / 2
+    for (const p of [w.p1, w.p2]) {
+      pts.push(new THREE.Vector3(p.x - half, 0, p.y - half), new THREE.Vector3(p.x + half, 0, p.y + half))
+    }
   }
   for (const r of plan.rooms) {
     for (const p of r.polygon ?? []) pts.push(planToWorld(p))
